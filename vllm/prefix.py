@@ -1,5 +1,6 @@
 from typing import Dict, List, Sequence, Tuple, Optional
-
+import pickle
+# Adding Pickle for cross session Prefix management
 from vllm.block import BlockTable
 
 
@@ -85,3 +86,32 @@ class PrefixPool:
         if prefix_hash not in self.prefixes:
             self.prefixes[prefix_hash] = prefix
         return self.prefixes[prefix_hash]
+                              
+"""Adding a way to manage PrefixPools across different inference sessions,
+the goal is simple management using Pickle to serialize Prefix objects and
+save them to a file for further use at startup. Del method from @DouHappy
+"""
+
+def delete_prefix(self, prefix_hash: int) -> Optional[int]:
+    if prefix_hash not in self.prefixes_hash:
+        return None
+    
+    prefix_id = self.prefixes_hash[prefix_hash]
+    # physics block will be deleted in block_manager outside this function
+    # del prefix
+    self.prefixes_hash.pop(prefix_hash)
+    for key, value in self.prefixes_hash.items():
+        if value > prefix_id:
+            self.prefixes_hash[key] -= 1
+
+    del self.prefixes[prefix_id]
+    
+    return prefix_id
+
+    def save_prefixes(self, filename: str) -> None:
+        with open(filename, 'wb') as f:
+            pickle.dump(self.prefixes, f)
+
+    def load_prefixes(self, filename: str) -> None:
+        with open(filename, 'rb') as f:
+            self.prefixes = pickle.load(f)
